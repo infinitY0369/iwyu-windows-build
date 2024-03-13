@@ -1,0 +1,81 @@
+name: Build include-what-you-use
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        type: [Release]
+        compiler: [{name: clang, c: clang, cxx: clang++}, {name: msvc, c: cl, cxx: cl}]
+        include:
+          - iwyu: {ver: 0.22, src: iwyu-src, build: iwyu-build, install: iwyu-install}
+          - llvm: {ver: llvmorg-18.1.1, src: llvm-src, build: llvm-build, install: llvm-install}
+
+    name: ${{ matrix.compiler.name }}
+    steps:
+      - name: Checkout include-what-you-use ${{ matrix.iwyu.ver }}
+        uses: actions/checkout@v4
+        with:
+          repository: include-what-you-use/include-what-you-use
+          ref: ${{ matrix.iwyu.ver }}
+          path: ${{ matrix.iwyu.src }}
+
+      - name: Checkout llvm-project ${{ matrix.llvm.ver }}
+        uses: actions/checkout@v4
+        with:
+          repository: llvm/llvm-project
+          ref: ${{ matrix.llvm.ver }}
+          path: ${{ matrix.llvm.src }}
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Ninja
+        run: choco install ninja
+
+      - name: Configure clang+llvm
+        run: >
+          cmake
+          -S "${{ matrix.llvm.src }}/llvm"
+          -B "${{ matrix.llvm.build }}"
+          -G "Ninja"
+          -DCMAKE_C_COMPILER="cl"
+          -DCMAKE_CXX_COMPILER="cl"
+          -DCMAKE_BUILD_TYPE="${{ matrix.type }}"
+          -DLLVM_ENABLE_PROJECTS="clang"
+
+      - name: Build clang+llvm
+        run: cmake --build ${{ matrix.llvm.build }} --config ${{ matrix.type }}
+
+      - name: Install clang+llvm
+        run: cmake --install ${{ matrix.llvm.build }} --prefix ${{ matrix.llvm.install }}
+
+      - name: Configure include-what-you-use
+        run: >
+          cmake
+          -S "${{ matrix.iwyu.src }}"
+          -B "${{ matrix.iwyu.build }}"
+          -G "Ninja"
+          -DCMAKE_C_COMPILER="${{ matrix.compiler.c }}"
+          -DCMAKE_CXX_COMPILER="${{ matrix.compiler.cxx }}"
+          -DCMAKE_BUILD_TYPE="${{ matrix.type }}"
+          -DCMAKE_PREFIX_PATH="${{ github.workspace }}/${{ matrix.llvm.install }}"
+
+      - name: Build include-what-you-use
+        run: cmake --build ${{ matrix.iwyu.build }} --config ${{ matrix.type }}
+
+      - name: Install include-what-you-use
+        run: cmake --install ${{ matrix.iwyu.build }} --prefix ${{ matrix.iwyu.install }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: include-what-you-use-${{ matrix.iwyu.ver }}-win64-${{ matrix.compiler.name }}
+          path: ${{ matrix.iwyu.install }}
+          if-no-files-found: error
