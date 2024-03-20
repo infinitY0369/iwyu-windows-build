@@ -15,7 +15,7 @@ jobs:
         compiler: [{name: clang, c: clang, cxx: clang++}, {name: msvc, c: cl, cxx: cl}]
         include:
           - iwyu: {ver: 0.22, src: iwyu-src, build: iwyu-build, install: iwyu-install}
-          - llvm: {ver: llvmorg-18.1.1, src: llvm-src, build: llvm-build, install: llvm-install}
+          - llvm: {ver: llvmorg-18.1.2, src: llvm-src, build: llvm-build, install: llvm-install}
 
     name: ${{ matrix.compiler.name }}
     steps:
